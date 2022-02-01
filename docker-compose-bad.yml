@@ -1,0 +1,47 @@
+version: '3'
+services:
+  nginx:
+    image: nginx:1.18
+    container_name: nginx
+    ports:
+      - 443:443
+      - 80:80
+    healthcheck: 
+        test: curl --fail http://localhost || exit 1
+        interval: 5s
+        retries: 1
+        timeout: 5s
+    deploy:
+        update_config:
+                delay: 5s
+                monitor: 15s
+                failure_action: rollback
+    volumes:
+      - ./certbot_data:/letsencrypt
+      - ./certbot_data/certs:/etc/letsencrypt      
+      - ./nginx/nginx.conf:/etc/nginx1/conf.d/default.conf
+    restart: always
+    entrypoint: "/bin/sh -c 'exit'"
+  certbot:
+    image: certbot/certbot
+    depends_on:
+      - nginx
+    volumes:
+      - ./certbot_data:/letsencrypt
+      - ./certbot_data/certs:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 13h & wait $${!}; done;'"
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - '9090:9090'
+    restart: always
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  grafana:
+    image: grafana/grafana
+    ports:
+      - 3000:3000
+    container_name: grafana
+    restart: always
+    depends_on:
+      - prometheus
